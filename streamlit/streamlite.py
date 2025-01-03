@@ -90,9 +90,6 @@ def recommandation(tconst):
     df_ml_num_SN = pd.DataFrame(SN.fit_transform(df_ml_num), columns=df_ml_num.columns, index=index)
 
     df_ml_encoded = pd.concat([df_ml_num_SN, df_ml_cat], axis=1)
-
-    # Sélection des films en fonction de la note
-    bons_films = df_ml_encoded[df_ml_encoded['notes'] >= 0.7]
     
     # Création d'une liste de colonnes à utiliser pour le modèle
     caracteristiques = df_ml_encoded.columns.drop(['tconst', 'nconst', 'title', 'title_ratings_numVotes', 'rating', 
@@ -106,10 +103,13 @@ def recommandation(tconst):
         'tmdb_AR', 'tmdb_RU', 'tmdb_DK', 'tmdb_NL', 'tmdb_BE', 'tmdb_AT',
         'tmdb_TR', 'tmdb_PL', 'tmdb_CH', 'tmdb_XC', 'tmdb_FI', 'tmdb_NO',
         'tmdb_IR', 'tmdb_XG', 'tmdb_EG', 'tmdb_NG', 'tmdb_ZA'])
+    
+    # Sélection des films en fonction de la note
+    bons_films = df_ml_encoded[df_ml_encoded['notes'] >= 0.7]
 
     # On veut que nos recommandations aient automatiquement un genre en commun et un pays de prod en commun avec le film selectionné
-    bons_films = bons_films[bons_films[genre].any(axis=1)]
-    bons_films = bons_films[bons_films[pays].any(axis=1)]
+    bons_films = bons_films[bons_films[genre].any(axis=1)] if genre else bons_films
+    bons_films = bons_films[bons_films[pays].any(axis=1)] if pays else bons_films
 
     # Création de notre modèle
     model = NearestNeighbors(n_neighbors=6, metric='euclidean')
@@ -139,8 +139,8 @@ def recommandation(tconst):
     bons_films2 = df_ml_encoded[df_ml_encoded['notes'] >= 0.7]
 
     # On veut que nos recommandations aient automatiquement un genre en commun et un pays de prod différent de celui du film selectionné
-    bons_films2 = bons_films2[bons_films2[genre].any(axis=1)]
-    bons_films2 = bons_films2[~bons_films2[pays].any(axis=1)]
+    bons_films2 = bons_films2[bons_films2[genre].any(axis=1)] if genre else bons_films
+    bons_films2 = bons_films2[~bons_films2[pays].any(axis=1)] if pays else bons_films
 
     # Création de notre modèle
     model2 = NearestNeighbors(n_neighbors=6, metric='euclidean')
@@ -323,7 +323,7 @@ def afficher_resultats_similarite(selection, selection2):
             with col:
                 st.empty()
         
-    if st.session_state['nb_selection'] != 1:
+    if 'nb_selection' not in st.session_state:
         st.markdown(f"<h2>Sortir des sentiers battus</h2>", unsafe_allow_html=True)
         df_display = df_infos.set_index('tconst').loc[selection2['tconst']].reset_index()
         
