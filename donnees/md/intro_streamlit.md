@@ -10,33 +10,27 @@
 
 Ce chapitre présente **la création d'une interface utilisateur interactive à l'aide de Streamlit**.
 
-Cette interface sert à **visualiser et à interagir avec le moteur de recommandation de films** développé précédemment. Elle permet aux spectateurs de **découvrir des films recommandés en fonction de leurs préférences, tout en offrant une vitrine dynamique pour le cinéma local.
+Cette interface sert à **visualiser et à interagir avec le moteur de recommandation de films** développé précédemment. Elle permet aux spectateurs de **découvrir des films recommandés en fonction de leurs préférences, tout en offrant une vitrine dynamique pour le cinéma local**.
 
 Accès direct à l'application en ligne : **[Le 23ème Écran](https://movie-recommendation-project-wcs-bleu-sauvage.streamlit.app/)**
 
 ---
 
-## Objectifs
-
-- **Interface Utilisateur**  
-Créer une interface web simple et intuitive pour interagir avec le moteur de recommandation.
-<br>
-
-- **Vitrine et Évolutivité**  
-Afficher les films populaires, les projections à venir et d'autres informations relatives au cinéma local. La plateforme est conçue pour être facilement mise à jour avec de nouvelles fonctionnalités et informations, comme des recommandations personnalisées, des actualités, etc.
-
----
-
 ## Sommaire
 
-### **[Méthodologie](./methodologie_streamlit.md)**  
-Une documentation expliquant le processus de création de l'interface, incluant la gestion de l'interface utilisateur, l'intégration avec le moteur de recommandation, et les bonnes pratiques pour une utilisation évolutive.
+### **1. 🧩 Méthodologie**  
+Une documentation expliquant le processus de création de l'interface, incluant la gestion de l'interface utilisateur, l'intégration avec le moteur de recommandation, et les bonnes pratiques pour une utilisation évolutive.  
+   - [Documentation](./methodologie_streamlit.md)
 
-### **[Notebook DataFrame INFO](../pdf/creation_df_info.pdf)**  
-Création d'un DataFrame "Info" issu de celui utilisé par l'algorithme pour permettre l'affichage "propre" des informations sur l'interface Streamlit.
+### **2. 📋 DataFrame Informations Films**  
+Création d'un DataFrame "Info" issu de celui utilisé par l'algorithme pour permettre l'affichage "propre" des informations sur l'interface Streamlit.  
+   - [Notebook](../notebooks/df_info.ipynb)
+   - [PDF](../pdf/creation_df_info.pdf)
 
-### **[Code de l'application](../notebooks/streamlite.py)**  
-Le fichier `.py` contenant le code Streamlit permettant de générer l'interface et de faire le lien avec le moteur de recommandation.
+### **3. 💻 Code de l'Application**  
+Le fichier `.py` contenant le code Streamlit permettant de générer l'interface et de faire le lien avec le moteur de recommandation.  
+   - [Fichier `.py`](../notebooks/streamlite.py)
+   - [PDF]()
 
 ---
 

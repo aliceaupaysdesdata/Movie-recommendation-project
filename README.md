@@ -30,7 +30,7 @@ Pensé pour **répondre aux besoins du client**, il illustre aussi nos **compét
 
 ---
 
-## Sommaire:
+## Sommaire
 
 #### 1. 🎬 Introduction et Contexte
    - [Présentation du projet et des enjeux](./donnees/md/projet_enjeux.md)
@@ -51,6 +51,9 @@ Pensé pour **répondre aux besoins du client**, il illustre aussi nos **compét
 #### 5. 🖥️ Interface Streamlit
    - [Méthodologie et Code de l'application](./donnees/md/intro_streamlit.md)
 
+#### 6. 💡 Conclusion et Pistes d'amélioration
+   - [Synthèse et Evolutivité](./donnees/md/debrief_projet.md)
+
 ---
 
 ## Contributions et Contacts
@@ -59,7 +62,7 @@ Pensé pour **répondre aux besoins du client**, il illustre aussi nos **compét
   <img src="./donnees/images/IMG_0256.JPG?raw=true" alt="Logo Cinéma" width="300">
 </p>
 
-Ce projet a été réalisé par une équipe d'étudiants en Data Analyse dans le cadre de notre formation à la **[Wide Code School](https://www.wildcodeschool.com/)**. Pour toute question ou suggestion, vous pouvez contacter les membres de l'équipe :
+Ce projet a été réalisé par une équipe d'étudiants en Data Analyse dans le cadre de notre formation à la **[Wild Code School](https://www.wildcodeschool.com/)**. Pour toute question ou suggestion, vous pouvez contacter les membres de l'équipe :
 
 - **[Alice Gontier](https://github.com/aliceaupaysdesdata)**
 - **[Pierre Quemener](https://github.com/Pierre-Q)** 

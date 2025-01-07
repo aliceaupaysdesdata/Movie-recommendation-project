@@ -8,38 +8,49 @@
 </p>
 <br>
 
-## Introduction
+## 1. Introduction
 
-L'application Streamlit "Le 23ème Écran" est une plateforme dédiée à la recommandation de films basée sur les préférences des utilisateurs.
+L'application "Le 23ème Écran" est une plateforme interactive Streamlit permettant :
 
-Grâce à une interface simple et interactive, elle permet aux utilisateurs de **rechercher un film et de recevoir des suggestions personnalisées** en fonction de leurs choix. Le projet utilise des techniques de traitement de données et de machine learning pour proposer des recommandations pertinentes.
+* D'explorer un catalogue de films.
+* D'obtenir des recommandations personnalisées basées sur un moteur de Machine Learning.
+* D'enrichir l'expérience utilisateur grâce à des informations détaillées sur les films.
+
+Le code repose sur plusieurs modules Python, notamment :
+
+* **Streamlit** pour l'interface utilisateur.
+* **Pandas** pour la manipulation de données.
+* **Scikit-learn** et**RapidFuzz** pour les recommandations et la recherche.
 
 ---
 
-## Étapes de Construction
+## 2. Architecture globale
 
-### Préparation du Projet
+### 2.1. Configuration de l'application
 
-Avant de commencer la construction de l'application, nous avons organisé les éléments nécessaires à son fonctionnement. Le projet repose sur plusieurs fichiers, notamment :
+La méthode `st.set_page_config()` personnalise la configuration globale de la page :
 
-- **Logo et Style CSS** : Les fichiers `logo.png` et `style.css` sont utilisés pour personnaliser l'apparence de l'application.
-- **Données** : Les fichiers CSV `df_info.csv.gz` et `DF_ML.csv.gz` contiennent les informations sur les films et les données nécessaires pour la recommandation basée sur un modèle d'apprentissage automatique.
+- `page_title`: Définit le titre de l'onglet du navigateur.
 
-### Configuration de l'Application
+* `layout`: Adopte une disposition large pour maximiser l'espace disponible.
 
-Une fois les données et les ressources collectées, nous avons configuré l'application Streamlit pour qu'elle s'affiche avec les bons paramètres :
-
-- **Page de Configuration** : La fonction `st.set_page_config` définit le titre et la disposition de la page (largeur complète).
-  
 ```python
 st.set_page_config(
     page_title="Cinéma le 23ème Écran",
     layout="wide")
+
 ```
 
-### Chargement des Données
+### 2.2. Chargement des données
 
-L'application charge les données nécessaires à l'aide de la fonction `load_movie_infos()`, qui lit le fichier CSV des informations sur les films. Le fichier est ensuite mis en cache avec `@st.cache_data` pour optimiser les performances.
+Les données nécessaires à l'application sont organisés en début de script et chaque ressource : csv, jpeg, etc... est stockée dans une variable dédiée. L'utilisation des données externes et le maintient du script et de l'application sont ainsi facilités.
+
+Deux fichiers principaux sont chargés :
+
+* `df_info.csv.gz` contient des informations générales sur les films.
+* `DF_ML.csv.gz` est utilisé pour les modèles de Machine Learning.
+
+Le chargement est optimisé avec `@st.cache_data`** : Cette annotation met en cache les données, accélérant les chargements tout en réduisant la charge sur les ressources système. **Avantage** : Le cache améliore les performances en évitant de recharger les données à chaque exécution.
 
 ```python
 @st.cache_data
@@ -48,9 +59,28 @@ def load_movie_infos():
     return df
 ```
 
-### Gestion du Menu de Navigation
+### 2.3. Gestion du style avec CSS
 
-L'interface propose un menu de navigation, permettant de naviguer entre les sections "Accueil", "À propos", et "Actualités". Le menu est construit à l'aide de colonnes et de boutons Streamlit, permettant de modifier l'état de la page en fonction des actions de l'utilisateur.
+Un fichier CSS externe est utilisé pour styliser l'interface et améliorer l'expérience utilisateur.
+
+```python
+with open(file_name) as f:
+st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+```
+
+- **Chemins relatifs** : Le fichier`style.css` doit se trouver dans le même répertoire que le script.
+
+* **Gestion des erreurs** : Si le fichier CSS est introuvable, une erreur est affichée avec`st.error()`.
+
+
+## 3. Fonctionnalités principales
+
+### 3.1 **Navigation dans l'application**
+
+Le menu de navigation est implémenté dans la fonction `afficher_menu()` et affiché avec des colonnes pour structurer l'interface :
+
+* **Concept** : Chaque bouton de menu met à jour la variable`st.session_state["menu_choice"]`.
+* **Résultat** : L'application affiche dynamiquement la section correspondante.
 
 ```python
 def afficher_menu():
@@ -65,38 +95,83 @@ def afficher_menu():
                 st.session_state["menu_choice"] = option
 ```
 
-### Affichage de l'Accueil et Recherche
+### 3.2 **Recherche de films**
 
-L'interface de l'accueil permet à l'utilisateur de saisir un titre de film. L'input de recherche est ensuite analysé pour suggérer des titres de films correspondants. La recherche est effectuée grâce à la fonction `search()`, qui utilise la bibliothèque `rapidfuzz` pour la correspondance approximative des titres.
-
-```python
-def search(query, choices, limit=10, threshold=50):
-    results = process.extract(query, choices, limit=limit, scorer=fuzz.WRatio, score_cutoff=80)
-    filtered_results = [result[0] for result in results if result[1] >= threshold]
-    return filtered_results
-```
-
-### Affichage des Informations du Film Sélectionné
-
-Lorsqu'un utilisateur sélectionne un film, l'application affiche des informations détaillées sur ce film, telles que le titre, l'année de sortie, la durée, le genre, la note, et l'affiche du film. Ces informations sont récupérées dans le dataframe `df_infos`.
+La recherche s'effectue via la fonction `search()` qui utilise RapidFuzz pour comparer des chaînes :
 
 ```python
-st.markdown(f"<h3>{df_infos.loc[df_infos['Titre'] == selected_title, 'Titre'].values[0]} ({df_infos.loc[df_infos['Titre'] == selected_title, 'Année de Sortie'].values[0]})</h3>", unsafe_allow_html=True)
+results = process.extract(query_lower, choices_lower, limit=10, scorer=fuzz.WRatio, score_cutoff=90)
+filtered_results = [choices[choices_lower.index(result[0])] for result in results if result[1] >= 50]
 ```
 
-### Fonction de Recommandation de Films
+- **Principe** : La bibliothèque RapidFuzz évalue la similarité textuelle pour identifier les films les plus proches du titre recherché.
 
-La fonction de recommandation `recommandation()` utilise un modèle d'apprentissage automatique pour recommander des films similaires en fonction de l'entrée de l'utilisateur.
+
+### 3.3 **Recommandations basées sur le Machine Learning**
+
+La fonction `recommandation()` combine plusieurs étapes pour générer des recommandations :
+
+1. **Préparation des données** :
+
+   * Les colonnes numériques sont normalisées avec`MinMaxScaler`.
+   * Les données catégorielles et numériques sont concaténées.
+2. **Modèle de recommandation** :
+
+* `NearestNeighbors` de Scikit-learn est utilisé pour trouver les films similaires en fonction des caractéristiques.
+* Les genres et pays du film sélectionné sont utilisés comme filtres.
+
+3. **Affichage des résultats** :
+
+Deux ensembles de recommandations sont générés :
+
+* Films avec des genres et pays similaires.
+* Films avec des genres similaires mais des pays différents.
+
+### 3.4 **Affichage interactif**
+
+Les résultats sont affichés sous forme de grilles avec des colonnes dynamiques :
 
 ```python
-def recommandation(tconst):
-    # Préparation des données
-    df_test = pd.read_csv("machine learning/DF_ML.csv.gz")
-    # ... prétraitement des données et apprentissage automatique ...
-    # Utilisation de KNN et TF-IDF pour faire des recommandations
+for row_index, row_df in enumerate(rows):
+    cols = st.columns(num_cols)
+    for col_index, row in enumerate(row_df.iloc):
+        with cols[col_index]:
+            st.image(f"https://image.tmdb.org/t/p/w500{row['Chemin Affiche']}", width=150)
 ```
 
-### Affichage des Sections "À propos" et "Actualités"
+Chaque film est accompagné de détails comme :
+
+* Le titre.
+* La note sur 10.
+* Le test de Bechdel.
+
+
+
+## 4. **Pages spécifiques**
+
+#### 4.1. Page d'accueil avec barre de recherche
+
+L'accueil est conçu pour introduire l'utilisateur à l'application.
+
+La fonction `afficher_accueil()` gère la recherche et les suggestions de films en déclenchant les fonction `search()` et `recommandation()` selon les entrées utilisateur.
+
+```python
+search_query = st.text_input("Pour recevoir des suggestions personnalisées :", ...)
+results = search(search_query, df_infos['Titre'].tolist())
+```
+
+* L'utilisateur saisit un titre dans une barre de recherche.
+* La fonction`search()` utilise**RapidFuzz** pour effectuer une correspondance floue :
+
+```python
+results = process.extract(query, choices, limit=limit, scorer=fuzz.WRatio, score_cutoff=80)
+```
+
+- **Affichage des résultats** :*
+  - Les films correspondant à la recherche sont proposés via un menu déroulant (`st.selectbox`).
+  - Une fois un film sélectionné, ses détails (titre, durée, genres, affiche, note) s’affichent.
+
+### 4.2. Pages "À propos" et "Actualités"
 
 Les sections "À propos" et "Actualités" offrent des informations supplémentaires sur le cinéma. Elles sont affichées de manière simple, leur contenu pourra être enrichi dans le temps.
 
@@ -106,20 +181,29 @@ def afficher_a_propos():
     st.markdown("<p>Le 23ème Écran, votre cinéma creusois et innovant.</p>", unsafe_allow_html=True)
 ```
 
-### Personnalisation et Style
+## 4. Gestion des états et navigation
 
-Le fichier CSS personnalisé permet d'ajouter un style unique à l'application. Il est chargé par la fonction `load_css()`, qui l'intègre dans la page web.
+### 4.1. État de session
+
+Le site exploite les variables de session pour suivre les interactions utilisateur :
+
+* **Menu actif** :`st.session_state["menu_choice"]` mémorise la page actuelle.
+
+### 4.2. Navigation conditionnelle
+
+L'affichage des pages repose sur la valeur de `menu_choice` :
 
 ```python
-def load_css(file_name):
-    try:
-        with open(file_name) as f:
-            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-    except FileNotFoundError:
-        st.error("Erreur : Le fichier CSS n'a pas été trouvé.")
+menu_choice = st.session_state.get("menu_choice", "Accueil")
+if menu_choice == "Accueil":
+    afficher_accueil(st.session_state["search_query"])
+elif menu_choice == "A_propos":
+    afficher_a_propos()
+elif menu_choice == "Actualites":
+    afficher_actualites()
+
 ```
 
----
 
 ## Synthèse
 
@@ -137,6 +221,33 @@ L'application "Le 23ème Écran" a été construite en suivant les étapes suiva
 
 Vous pouvez accéder à l'application en ligne via Streamlit Cloud à l'adresse suivante :
 [https://movie-recommendation-project-wcs-bleu-sauvage.streamlit.app/](https://movie-recommendation-project-wcs-bleu-sauvage.streamlit.app/)
+
+
+## Améliorations à apporter
+
+### Modulariser les fonctions :
+
+* Diviser le code en modules distincts (chargement des données, logique de recommandation, affichage).
+* Regrouper les fonctions similaires dans des classes ou des fichiers séparés (e.g., un fichier pour les données, un autre pour l'interface).
+
+### UI/UX :
+
+- Uniformiser les styles CSS en externalisant les classes dans un fichier CSS bien structuré.
+
+* Améliorer les messages d'erreur ou d'information pour guider l'utilisateur.
+* Adapter l'affichage des colonnes pour une meilleure expérience sur mobile (p. ex., passez à 2-3 colonnes si l'écran est étroit).
+
+### Accessibilité et SEO pour Streamlit Cloud :
+
+- Ajouter des descriptions alt et des balises `<meta>` pour rendre l'application plus accessible.
+
+### Ajout d'un espace utilisateur avec connexion :
+
+L'ajout d'un espace privé pour les utilisateurs permettrait de proposer un service plus personnalisé :
+
+- Gestion des abonnements aux listes de diffusions du cinéma : newsletter, programmation à venir, thématiques spécifiques,
+- Gestion des données personnelles : nom, prénom, âge, adresse postale, meilleure connaissance du public, notamment géographique et âge,
+- Notation des films et historiques des favoris, pour enrichir la connaissance du public local du cinéma,
 
 ---
 

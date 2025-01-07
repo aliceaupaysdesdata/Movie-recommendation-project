@@ -1,46 +1,41 @@
 # Script pour l'application Streamlit "Le 23ème Écran".
 
 # ------- INFOS POUR LANCER LE STREAMLIT -------
-
 # Commande pour lancer sur Windows : streamlit run .\streamlit\streamlite.py
 # Afficher le site web hébergé sur Git Hub / Streamlit Cloud : https://movie-recommendation-project-wcs-bleu-sauvage.streamlit.app/
 
+# Autre fichier à supprimer quand dev finalisé :
+# Commande pour lancer sur Windows : streamlit run .\streamlit\streamlit2.py
 
 
 # ------- Import des bibliothèques nécessaires -------
-
 import streamlit as st
-import streamlit_authenticator as stauth
 import pandas as pd
 from streamlit_option_menu import option_menu
-# from fuzzywuzzy import process
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import time
-import os # lire la feuille de style (chemin absolu)
+import os
 from rapidfuzz import process, fuzz
-
+from sklearn.neighbors import NearestNeighbors
+from sklearn.preprocessing import MinMaxScaler
 
 
 # ------- CHEMINS FICHIERS DONNEES -------
-
 logo = "streamlit/logo.png"
-
 style_css = "streamlit/style.css"
-
-df_infos_csv = "donnees/data/df_info.csv.gz"    
-
+df_infos_csv = "donnees/data/df_info.csv.gz"
 df_ml_csv = "machine learning/DF_ML.csv.gz"
+image_cinema = "donnees/images/Cinéma.JPG"
+image_cinema2 = "donnees/images/23_2.JPG"
+
 
 # ------- CONFIG GLOBALE -------
-
 st.set_page_config(
     page_title="Cinéma le 23ème Écran",
     layout="wide")
 
 
 # ------- CHARGEMENT DES DONNEES -------
-
 @st.cache_data
 def load_movie_infos():
     df = pd.read_csv(df_infos_csv)
@@ -48,13 +43,10 @@ def load_movie_infos():
 
 df_infos = load_movie_infos() 
 
-   
 
 # ------ Fonction de récupération du style CSS ------
-
 def load_css(file_name):
-    # Utiliser un chemin relatif basé sur la racine
-    file_path = file_name  # Avec style.css dans le même dossier que le script.py
+    file_path = file_name
     try:
         with open(file_path) as f:
             st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
@@ -64,65 +56,244 @@ def load_css(file_name):
 load_css(style_css)
 
 
+# ------- Fonction de similarité avec un modèle de ML -------
+def recommandation(tconst):
+    # Chargement des données
+    df_ml = pd.read_csv(df_ml_csv)
+
+    # Récupération des valeurs genre et pays qui correspondent au film sélectionné
+    df_selection = df_ml[df_ml['tconst'] == tconst]
+    colonnes_genre = [
+        'Action', 'Adventure', 'Animation', 'Biography', 'Comedy', 'Crime',
+        'Documentary', 'Drama', 'Family', 'Fantasy', 'Game-Show', 'History',
+        'Horror', 'Music', 'Musical', 'Mystery', 'News', 'Reality-TV',
+        'Romance', 'Sci-Fi', 'Sport', 'Talk-Show', 'Thriller', 'War', 'Western'
+    ]
+    colonnes_pays = [
+        'tmdb_US', 'tmdb_FR', 'tmdb_GB', 'tmdb_DE', 'tmdb_JP', 'tmdb_IN',
+        'tmdb_IT', 'tmdb_CA', 'tmdb_ES', 'tmdb_MX', 'tmdb_HK', 'tmdb_BR',
+        'tmdb_SE', 'tmdb_SU', 'tmdb_PH', 'tmdb_KR', 'tmdb_AU', 'tmdb_CN',
+        'tmdb_AR', 'tmdb_RU', 'tmdb_DK', 'tmdb_NL', 'tmdb_BE', 'tmdb_AT',
+        'tmdb_TR', 'tmdb_PL', 'tmdb_CH', 'tmdb_XC', 'tmdb_FI', 'tmdb_NO',
+        'tmdb_IR', 'tmdb_XG', 'tmdb_EG', 'tmdb_NG', 'tmdb_ZA'
+    ]
+
+    genre = [colonne for colonne in df_selection.columns if df_selection[colonne].iloc[0] == True and colonne in colonnes_genre]
+    pays = [colonne for colonne in df_selection.columns if df_selection[colonne].iloc[0] == True and colonne in colonnes_pays]
+
+    index = df_ml.index
+    df_ml_num = df_ml.select_dtypes('number')
+    df_ml_cat = df_ml.select_dtypes(['object', 'category', 'string', 'bool'])
+
+    # Normalisation des colonnes numériques
+    SN = MinMaxScaler()
+    df_ml_num_SN = pd.DataFrame(SN.fit_transform(df_ml_num), columns=df_ml_num.columns, index=index)
+
+    df_ml_encoded = pd.concat([df_ml_num_SN, df_ml_cat], axis=1)
+    
+    # Création d'une liste de colonnes à utiliser pour le modèle
+    caracteristiques = df_ml_encoded.columns.drop(['tconst', 'nconst', 'title', 'title_ratings_numVotes', 'rating', 
+        'Action', 'Adventure', 'Animation', 'Biography', 'Comedy', 'Crime',
+        'Documentary', 'Drama', 'Family', 'Fantasy', 'Game-Show', 'History',
+        'Horror', 'Music', 'Musical', 'Mystery', 'News', 'Reality-TV',
+        'Romance', 'Sci-Fi', 'Sport', 'Talk-Show', 'Thriller', 'War', 'Western', 
+        'tmdb_US', 'tmdb_FR', 'tmdb_GB', 'tmdb_DE', 'tmdb_JP', 'tmdb_IN',
+        'tmdb_IT', 'tmdb_CA', 'tmdb_ES', 'tmdb_MX', 'tmdb_HK', 'tmdb_BR',
+        'tmdb_SE', 'tmdb_SU', 'tmdb_PH', 'tmdb_KR', 'tmdb_AU', 'tmdb_CN',
+        'tmdb_AR', 'tmdb_RU', 'tmdb_DK', 'tmdb_NL', 'tmdb_BE', 'tmdb_AT',
+        'tmdb_TR', 'tmdb_PL', 'tmdb_CH', 'tmdb_XC', 'tmdb_FI', 'tmdb_NO',
+        'tmdb_IR', 'tmdb_XG', 'tmdb_EG', 'tmdb_NG', 'tmdb_ZA'])
+    
+    # Sélection des films en fonction de la note
+    bons_films = df_ml_encoded[df_ml_encoded['notes'] >= 0.7]
+
+    # On veut que nos recommandations aient automatiquement un genre en commun et un pays de prod en commun avec le film selectionné
+    bons_films = bons_films[bons_films[genre].any(axis=1)] if genre else bons_films
+    bons_films = bons_films[bons_films[pays].any(axis=1)] if pays else bons_films
+
+    # Création de notre modèle
+    model = NearestNeighbors(n_neighbors=6, metric='euclidean')
+    model.fit(bons_films[caracteristiques])
+
+    # On déclare les caractéristiques du film sélectionné par l'utilisateur
+    caract_film = df_ml_encoded[df_ml_encoded['tconst'] == tconst][caracteristiques]
+
+    # Calcul des distances et indices des voisins
+    distances, indices = model.kneighbors(caract_film)
+
+    # Affichage de la sélection des films en fonction des indices trouvés par le modèle
+    if caract_film['notes'].values[0] > 0.7:
+        distances = distances[0][1:6]
+        indices = indices[0][1:6]
+        selection = bons_films.iloc[indices]['tconst']
+    else:
+        distances = distances[0][0:5]
+        indices = indices[0][0:5]
+        selection = bons_films.iloc[indices]['tconst']
+
+    selection = pd.DataFrame(selection).reset_index(drop=True)
+
+    # 2e reco : 5 films avec genre commun et pays différent
+
+    # Sélection des films en fonction de la note
+    bons_films2 = df_ml_encoded[df_ml_encoded['notes'] >= 0.7]
+
+    # On veut que nos recommandations aient automatiquement un genre en commun et un pays de prod différent de celui du film selectionné
+    bons_films2 = bons_films2[bons_films2[genre].any(axis=1)] if genre else bons_films
+    bons_films2 = bons_films2[~bons_films2[pays].any(axis=1)] if pays else bons_films
+
+    # Création de notre modèle
+    model2 = NearestNeighbors(n_neighbors=6, metric='euclidean')
+    model2.fit(bons_films2[caracteristiques])
+
+    distances2, indices2 = model2.kneighbors(caract_film)
+
+    # Affichage de la sélection des films en fonction des indices trouvés par le modèle
+    if caract_film['notes'].values[0] > 0.7:
+        distances2 = distances2[0][1:6]
+        indices2 = indices2[0][1:6]
+        selection2 = bons_films2.iloc[indices2]['tconst']
+    else:
+        distances2 = distances2[0][0:5]
+        indices2 = indices2[0][0:5]
+        selection2 = bons_films2.iloc[indices2]['tconst']
+
+    selection2 = pd.DataFrame(selection2).reset_index(drop=True)
+    
+    if selection.equals(selection2):
+        st.session_state["nb_selection"] = 1
+
+    return afficher_resultats_similarite(selection, selection2)
+
 
 # ------- Fonctions de navigation -------
 
-# Fonction pour afficher le menu
 def afficher_menu():
-    # Affichage du menu avec le logo à gauche et les boutons de navigation
-    col1, col2 = st.columns([1, 4])
+    col1, col2 = st.columns([1, 3]) # Structure en 4 colonnes pour l'en-tête
     with col1:
-    # Affichage du logo à gauche
         st.image(logo, use_container_width=True)
     with col2:
-    # Initialisation de l'état si nécessaire
         if "menu_choice" not in st.session_state:
             st.session_state["menu_choice"] = "Accueil" 
-        # Liste des options du menu
         options = ["Accueil", "À propos", "Actualités"]
-        # Construction des boutons dans une disposition horizontale
         cols = st.columns(len(options))
         for i, option in enumerate(options):
-            # Bouton interactif dans chaque colonne
-            if cols[i].button(option, key=f"bouton_{option}"):
+            if cols[i].button(option, key=f"menu_bouton_{option}"):
                 st.session_state["menu_choice"] = option
-    
+                # Réinitialiser la recherche quand l'utilisateur clique sur "Accueil"
+                if option == "Accueil":
+                    st.session_state["search_query"] = ""
+                    if 'nb_selection' in st.session_state:
+                        del st.session_state['nb_selection']
+                    if 'search_query' in st.session_state:
+                        del st.session_state['search_query']
+                    st.rerun()
 
-# Fonction pour afficher l'accueil
-def afficher_accueil(search_query=""):
+# Fonction qui identifie les noms de films les plus proches avec le texte entré dans la barre de recherches
+def search(query, choices):
+    if 'nb_selection' in st.session_state:
+        del st.session_state['nb_selection']
+    # Convertir les chaînes en minuscules
+    query_lower = query.lower()
+    choices_lower = [choice.lower() for choice in choices]
+
+    # Effectuer la recherche sur les chaînes en minuscules
+    results = process.extract(query_lower, choices_lower, limit=10, scorer=fuzz.WRatio, score_cutoff=90)
+    
+    # Filtrer les résultats en conservant uniquement les éléments dont le score est suffisant
+    filtered_results = [choices[choices_lower.index(result[0])] for result in results if result[1] >= 50]
+    
+    return filtered_results
+
+
+
+def handle_movie_selection(titre, tconst):
+    st.session_state["search_query"] = titre
+    st.session_state["menu_choice"] = "Accueil"
+    if 'nb_selection' in st.session_state:
+        del st.session_state['nb_selection']
+
+
+def afficher_accueil():
+    st.markdown(
+        """
+        ## Bienvenue au **23ème Écran**, votre cinéma local au cœur de la Creuse !
+        Nous sommes bien plus qu'une simple salle de projection. Ici, nous célébrons le septième art avec une approche chaleureuse et conviviale, adaptée aux attentes de notre public.
+
+        Nous mettons à votre disposition un moteur de recommandations personnalisées qui ne se contente pas de vous proposer des films aux caractéristiques proches de vos préférences, mais sélectionne également des œuvres de qualité : des films bien notés, des créations d'auteurs ou indépendantes, qui vous invitent à sortir des sentiers battus des blockbusters traditionnels.
+
+        C'est une porte ouverte sur le monde du cinéma, une invitation à découvrir des films méconnus, des documentaires et à explorer des perspectives nouvelles. De plus, une indication selon l'indice Bechdel sera fournie pour vous aider à discerner la représentation dans les films.
+
+        Enfin, chaque clic sur les détails d'un film génère automatiquement une nouvelle sélection en fonction de vos choix, enrichissant encore votre expérience de découverte.
+        """
+    )
     st.markdown("<div class='search-container'>", unsafe_allow_html=True)
-    search_query = st.text_input("Pour recevoir des suggestions personnalisées :",
-                                placeholder="Renseignez le titre d'un film que vous appreciez...",
-                                key="search_query")
+    
+    # Réinitialiser la recherche si elle n'existe pas
+    if "search_query" not in st.session_state:
+        st.session_state["search_query"] = ""
+
+    search_query = st.text_input(
+        "Pour recevoir des suggestions personnalisées :",
+        value=st.session_state["search_query"],
+        placeholder="Renseignez le titre d'un film que vous appréciez...",
+        key="search_input"
+    )
+    
+    if st.session_state.get("search_query"):
+        search_query = st.session_state["search_query"]
+        st.session_state["search_query"] = "" # Réinitialiser la recherche après l'utilisation
+        
     st.markdown("</div>", unsafe_allow_html=True)
     
     if search_query:
-        results = search(search_query, df_infos['Titre'].tolist())
+        
+        # Créer une colonne combinée "Titre (Année)" dans le DataFrame
+        df_infos['Titre_Affiche'] = df_infos['Titre'] + " (" + df_infos['Année de Sortie'].astype(str) + ")"
+
+        results = search(search_query, df_infos['Titre_Affiche'].tolist())
         if results:
-            selected_title = st.selectbox("Sélectionnez un film :", results)
-            st.markdown(f"<h2>Votre sélection</h2>",
-                    unsafe_allow_html=True)
-            col3, col4, col5, col6 = st.columns([1, 1, 1, 1])
+            # Créer un dictionnaire associant "Titre (Année)" au tconst
+            options = {}
+            for _, row in df_infos[df_infos['Titre_Affiche'].isin(results)].iterrows():
+                options[row['Titre_Affiche']] = row['tconst']
+            
+            # Sélectionner le film dans la selectbox
+            selected_title = st.selectbox("Sélectionnez un film :", list(options.keys()), key="film_select")
+            
+            # Récupérer le tconst correspondant au film sélectionné
+            tconst_selectionne = options[selected_title]
+            
+            st.markdown(f"<h2>Votre sélection</h2>", unsafe_allow_html=True)
+            
+            col3, col4 = st.columns([1, 3])
+            col5, col6 = st.columns([1, 3])
+            
+            # Affichage des détails du film sélectionné
+            film_info = df_infos[df_infos['tconst'] == tconst_selectionne].iloc[0]
+            
             with col3:
-                # Vérifier si le chemin de l'affiche n'est pas manquant
-                st.markdown(f"<h3>{df_infos.loc[df_infos['Titre'] == selected_title, 'Titre'].values[0]} ({df_infos.loc[df_infos['Titre'] == selected_title, 'Année de Sortie'].values[0]})</h3>", unsafe_allow_html=True)
-                if not pd.isna(df_infos.loc[df_infos['Titre'] == selected_title, "Chemin Affiche"]).values[0]:
-                    st.image(f"https://image.tmdb.org/t/p/w500{df_infos.loc[df_infos['Titre'] == selected_title, 'Chemin Affiche'].values[0]}", width=150)
+                st.markdown(f"<h3>{film_info['Titre']} ({film_info['Année de Sortie']})</h3>", unsafe_allow_html=True)
+            
+            with col5:
+                if pd.notna(film_info["Chemin Affiche"]):
+                    st.image(f"https://image.tmdb.org/t/p/w500{film_info['Chemin Affiche']}", width=150)
                 else:
                     st.markdown(
-                        f"<div style='width: 150px; height: 225px; background-color: black; color: white; display: flex; justify-content: center; align-items: center; text-align: center;'>{selected_title}</div>",
+                        f"<div style='width: 150px; height: 225px; background-color: black; color: white; display: flex; justify-content: center; align-items: center; text-align: center;'>{film_info['Titre']}</div>",
                         unsafe_allow_html=True
                     )
-            with col4:
-                # Informations supplémentaires
-                
-                st.markdown(f"Durée : {df_infos.loc[df_infos['Titre'] == selected_title, 'Durée (min)'].values[0]} min")
-                st.markdown(f"{df_infos.loc[df_infos['Titre'] == selected_title, 'genres'].values[0]}")
-
-                etoiles_jaunes = "⭐" * int(round(df_infos.loc[df_infos['Titre'] == selected_title, 'Note'].values[0] / 2))
-                st.markdown(f"{round(df_infos.loc[df_infos['Titre'] == selected_title, 'Note'].values[0],1)}/10 {etoiles_jaunes}")
-                st.markdown(f"{round(df_infos.loc[df_infos['Titre'] == selected_title, 'Indice Bechdel'].values[0],0)}/3 🙍‍♀️ Test de Bechdel")
-            recommandation(df_infos[df_infos['Titre'] == selected_title]['tconst'].values[0])
+            
+            with col6:
+                st.markdown(f"Synopsis : {film_info['Synopsis']}")
+                st.markdown(f"Durée : {film_info['Durée (min)']} min")
+                st.markdown(f"{film_info['genres']}")
+                etoiles_jaunes = "⭐" * int(round(film_info['Note'] / 2))
+                st.markdown(f"{round(film_info['Note'],1)}/10 {etoiles_jaunes}")
+                st.markdown(f"{int(film_info['Indice Bechdel'])}/3 🙍‍♀️ Test de Bechdel")
+            
+            # Appeler la fonction de recommandation avec le tconst
+            recommandation(tconst_selectionne)
         else:
             st.write("Aucun résultat trouvé.")
     else:
@@ -130,291 +301,193 @@ def afficher_accueil(search_query=""):
 
 
 
-# Fonction pour afficher "À propos"
-def afficher_a_propos():
-    st.markdown("<header>", unsafe_allow_html=True)
-    st.title("À propos")
-    st.markdown("<p>Le 23ème Écran, votre cinéma creusois et innovant.</p>", unsafe_allow_html=True)
-    st.markdown("</header>", unsafe_allow_html=True)
-
-
-
-# Fonction pour afficher les actualités
-def afficher_actualites():
-    st.title("Actualités")
-    st.write("Les actualités de votre cinéma à Guéret.")
-
-
-# ------- Fonction de correspondances de noms entré barre de recherches -------
-
-def search(query, choices, limit=10, threshold=50):
-    results = process.extract(query, choices, limit = limit, scorer=fuzz.WRatio, score_cutoff=80)
-    filtered_results = [result[0] for result in results if result[1] >= threshold]
-    return filtered_results
-
-
-
-#  ------- Fonction de similarité avec un modèle de ML -------
-
-def recommandation(tconst):
-    import pandas as pd
-    from sklearn.neighbors import NearestNeighbors
-
-    import warnings
-    warnings.filterwarnings("ignore", category=UserWarning)
-    warnings.filterwarnings("ignore", category=FutureWarning)
-
-    df_test = pd.read_csv("machine learning/DF_ML.csv.gz")
-
-    # Préparation des données
-
-    index = df_test.index
-    df_test_num = df_test.select_dtypes('number')
-    df_test_cat = df_test.select_dtypes(['object', 'category', 'string', 'bool'])
-
-    # Normalisation des colonnes numériques
-    from sklearn.preprocessing import MinMaxScaler
-    SN = MinMaxScaler()
-    df_test_num_SN = pd.DataFrame(SN.fit_transform(df_test_num), columns=df_test_num.columns, index=index)
-
-    # Encodage uniquement de la colonne 'nconst'
-    df_test_cat_encoded = df_test_cat.copy()
-    from sklearn.preprocessing import LabelEncoder
-    le = LabelEncoder()
-    df_test_cat_encoded['nconst'] = le.fit_transform(df_test_cat_encoded['nconst'].fillna('inconnu'))
-
-    # On assemble le df numérique et le df texte
-    df_test_encoded = pd.concat([df_test_num_SN, df_test_cat_encoded], axis=1)
-
-    #On sépare notre df en deux groupes, en fonction de la note
-    bons_films = df_test_encoded[df_test_encoded['notes'] >= 0.7]
-
-    # KNN sur les caractéristiques numériques
-
-    colonnes_a_exclure = ['tconst', 'title', 'tmdb_popularity', 'title_ratings_numVotes', 'imdb_id', 'genres', 'overview', 'overview_lem']
-    caracteristiques = df_test_encoded.columns.drop(colonnes_a_exclure, errors='ignore')
-
-    model = NearestNeighbors(n_neighbors=1000, metric='euclidean') # Il faudra tester d'autres combinaisons
-    model.fit(bons_films[caracteristiques])
-
-    caract_film = df_test_encoded[df_test_encoded['tconst'] == tconst][caracteristiques]
-    distances, indices = model.kneighbors(caract_film)
-
-    if not df_test_encoded[(df_test_encoded['tconst'] == tconst) & (df_test_encoded['notes'] >= 0.7)].empty:
-        selection = bons_films.iloc[indices[0]].copy()
-        selection['distance_knn'] = distances[0]
-    else:
-        selection = bons_films.iloc[indices[0]].copy()
-        selection = pd.concat([df_test_encoded[df_test_encoded['tconst'] == tconst], selection.iloc[:-1]], axis=0)
-        selection['distance_knn'] = distances[0]
-
-    # TF-IDF avec lemmatisation
-
-    colonnes_poids = {
-        'genres': 1,
-        'overview_lem': 1,
-        'nconst': 1
-    }
-
-    # On crée une colonne 'texte' qui combine les valeurs pondérées des colonnes spécifiées
-    selection['texte'] = selection.apply(lambda row: 
-        ' '.join([
-            (str(row[col]) + ' ') * colonnes_poids.get(col, 1)  # Répète la valeur de la colonne selon son poids
-            for col in colonnes_poids.keys()
-        ]),
-        axis=1
-    )
-
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    vectorizer = TfidfVectorizer(stop_words='english', max_df=0.8)
-    tfidf_matrix = vectorizer.fit_transform(selection['texte'])
-
-    model_tfidf = NearestNeighbors(n_neighbors=1000, metric='cosine')
-    model_tfidf.fit(tfidf_matrix)
-
-    distances_tfidf, indices_tfidf = model_tfidf.kneighbors(tfidf_matrix[0])
-    selection['distance_tfidf'] = distances_tfidf[0]
+def afficher_resultats_similarite(selection, selection2):
+    st.markdown(f"<h2>Nos recommandations</h2>", unsafe_allow_html=True)
+    df_display = df_infos.set_index('tconst').loc[selection['tconst']].reset_index()
     
-    # Moyenne pondérée des distances
+    num_cols = 5
+    rows = [df_display.iloc[i:i + num_cols] for i in range(0, len(df_display), num_cols)]
 
-    poids_knn = 1
-    poids_tfidf = 100
+    for row_index, row_df in enumerate(rows):
+        cols = st.columns(num_cols)
 
-    selection['distance_ponderee'] = (
-        poids_knn * selection['distance_knn']) + (poids_tfidf * selection['distance_tfidf']
-    ) 
-
-    # Tri final par la distance pondérée
-    selection = selection.sort_values(by='distance_ponderee')
-
-    # Résultat final
-
-    selection_finale = pd.DataFrame(selection['tconst'][1:11]).reset_index(drop=True)
-
-    return afficher_resultats_similarite(selection_finale)
-
-
-
-# ------- Fonction d'affichage des résultats de recherche de similarité (ML) -------
-
-def afficher_resultats_similarite(df_resultats_similarite):
-    st.markdown(f"<h2>Nos recommandations</h2>",
-                    unsafe_allow_html=True)
-    # Recherche des informations dans df_infos pour les films identifiés 
-    # dans df_resultats_similarite via leur identifiant unique (tconst).
-    df_display = df_infos[df_infos['tconst'].isin(df_resultats_similarite['tconst'])]
-
-    # Configuration des colonnes
-    num_cols = 5                # Définit le nombre de colonnes à afficher dans l'interface.
-    rows = [df_display.iloc[i:i + num_cols] for i in range(0, len(df_display), num_cols)] # Divise le DataFrame en groupes de 5 films pour créer des lignes dans le tableau.
-
-    # Gestion de l'état (Session)
-    # Initialiser une variable de session pour stocker le film sélectionné.
-    if "selected_movie_from_reco" not in st.session_state: 
-        st.session_state["selected_movie_from_reco"] = None 
-
-    # Parcours des lignes de films
-    # st.columns(num_cols) : Crée un ensemble de colonnes pour afficher plusieurs films côte à côte.
-    # La boucle : Parcourt chaque ligne de films (définie précédemment).
-    for row_df in rows:
-        cols = st.columns(num_cols) 
-
-        for col, (_, row) in zip(cols, row_df.iterrows()): # Pour chaque film dans une ligne
-            with col:
-                # Affichage de l'affiche ou du titre en fallback
-
-                # Si une affiche est disponible
+        for col_index, row in enumerate(row_df.iloc):
+            with cols[col_index]:
                 if pd.notna(row["Chemin Affiche"]):
                     st.image(f"https://image.tmdb.org/t/p/w500{row['Chemin Affiche']}", width=150)
-                    if st.button("Voir les détails de ce film", key=f"poster_{row['tconst']}"):
-                        st.session_state["selected_movie_from_reco"] = row['Titre']
-                        afficher_details_film()
                 else:
                     st.markdown(
                         f"<div style='width: 150px; height: 225px; background-color: black; color: white; display: flex; justify-content: center; align-items: center; text-align: center;'>{row['Titre']}</div>",
                         unsafe_allow_html=True
                     )
-                    if st.button("Voir les détails de ce film", key=f"title_{row['tconst']}"):
-                        st.session_state["selected_movie_from_reco"] = row['Titre']
-                        afficher_details_film()
-                    
 
-                # Informations supplémentaires
                 st.markdown(f"**{row['Titre']}**", unsafe_allow_html=True)
                 st.markdown(f"{row['Année de Sortie']} - {row['Durée (min)']} min")
                 st.markdown(f"{row['genres']}")
 
                 etoiles_jaunes = "⭐" * round(row['Note'] / 2)
                 st.markdown(f"{round(row['Note'],1)}/10 {etoiles_jaunes}")
-                st.markdown(f"🙍‍♀️ Test de Bechdel : {row['Indice Bechdel']}/3")
+                st.markdown(f"{int(row['Indice Bechdel'])}/3 🙍‍♀️ Test de Bechdel")
 
-        # Remplissage des colonnes vides si nécessaire
+                unique_key = f"bouton_{row['tconst']}_{row_index}_{col_index}"
+                if st.button("Voir les détails de ce film", 
+                           key=unique_key,
+                           on_click=handle_movie_selection,
+                           args=(row['Titre'], row['tconst'])):
+                    pass
+
+                st.markdown(f"<br>", unsafe_allow_html=True)
+
         for col in cols[len(row_df):]:
             with col:
                 st.empty()
+        
+    if 'nb_selection' not in st.session_state:
+        st.markdown(f"<h2>Sortir des sentiers battus</h2>", unsafe_allow_html=True)
+        df_display = df_infos.set_index('tconst').loc[selection2['tconst']].reset_index()
+        
+        num_cols = 5
+        rows = [df_display.iloc[i:i + num_cols] for i in range(0, len(df_display), num_cols)]
+
+        for row_index, row_df in enumerate(rows):
+            cols = st.columns(num_cols)
+
+            for col_index, row in enumerate(row_df.iloc):
+                with cols[col_index]:
+                    if pd.notna(row["Chemin Affiche"]):
+                        st.image(f"https://image.tmdb.org/t/p/w500{row['Chemin Affiche']}", width=150)
+                    else:
+                        st.markdown(
+                            f"<div style='width: 150px; height: 225px; background-color: black; color: white; display: flex; justify-content: center; align-items: center; text-align: center;'>{row['Titre']}</div>",
+                            unsafe_allow_html=True
+                        )
+
+                    st.markdown(f"**{row['Titre']}**", unsafe_allow_html=True)
+                    st.markdown(f"{row['Année de Sortie']} - {row['Durée (min)']} min")
+                    st.markdown(f"{row['genres']}")
+
+                    etoiles_jaunes = "⭐" * round(row['Note'] / 2)
+                    st.markdown(f"{round(row['Note'],1)}/10 {etoiles_jaunes}")
+                    st.markdown(f"{int(row['Indice Bechdel'])}/3 🙍‍♀️ Test de Bechdel")
+
+                    unique_key = f"bouton_{row['tconst']}_{row_index}_{col_index}"
+                    if st.button("Voir les détails de ce film", 
+                            key=unique_key,
+                            on_click=handle_movie_selection,
+                            args=(row['Titre_Affiche'], row['tconst'])):
+                        pass
+
+                    st.markdown(f"<br>", unsafe_allow_html=True)
+
+            for col in cols[len(row_df):]:
+                with col:
+                    st.empty()
 
 
+def afficher_a_propos():
+    st.markdown("<header>", unsafe_allow_html=True)
+    st.title("À propos")
+
+    st.image(image_cinema2, width=400, caption="Le 23ème Ecran, en plein coeur de la ville !")
     
-# Fonction pour afficher les détails du film sélectionné A FINIR ET RELIER AU RESTE NE FONCTIONNE PAS POUR LINSTANT
-def afficher_details_film():
-    movie_title = st.session_state['selected_movie_from_reco']
-    # Recherche du film dans la base de données
-    movie_data = df_infos[df_infos['Titre'] == movie_title]
+    st.markdown(
+        """
+        ### Notre histoire
+        Situé à **Guéret**, le cinéma **Le 23ème Écran** est né de l'envie de redynamiser l'offre culturelle de notre région.  
+        Nous proposons une programmation **diversifiée**, alliant grands classiques, films récents, et pépites indépendantes, afin de satisfaire toutes les générations et tous les goûts.
 
-    # Affichage des informations détaillées du film
-    st.title(movie_data['Titre'])
-    image_url = f"https://image.tmdb.org/t/p/w500{movie_data['Chemin Affiche']}"
-    if movie_data['Chemin Affiche'].isna()== False:
-        st.image(image_url, width=300)
-    else:
-        st.write("Aucune affiche disponible.")
+        ### Une expérience unique
+        - **Confort moderne** : des salles équipées pour un son et une image de haute qualité.
+        - **Événements spéciaux** : avant-premières, soirées thématiques, et rencontres avec des réalisateurs ou acteurs.
+        - **Espace détente** : un lieu chaleureux pour partager un moment autour d'un café avant ou après votre séance.
 
-    st.markdown(f"**Année de sortie :** {movie_data['Année de Sortie']}")
-    st.markdown(f"**Durée :** {movie_data['Durée (min)']} min")
-    st.markdown(f"**Genres :** {movie_data['genres']}")
-    st.markdown(f"**Note :** {round(movie_data['Note'], 2)}/10")
+        ### Le moteur de recommandations, votre compagnon cinéphile
+        Pour aller encore plus loin, nous avons développé un **moteur de recommandations** personnalisé.  
+        Son objectif ? Vous aider à découvrir les films qui correspondent à vos goûts et à vos envies.  
+        Grâce à des suggestions pertinentes basées sur nos analyses et vos préférences, il vous accompagne dans votre voyage cinématographique.  
+        Vous pouvez utiliser cet outil directement depuis notre site Internet, dans une **interface intuitive** et facile à prendre en main.
 
-    # Bouton pour revenir à la liste des films
-    if st.button("Retour à la liste des films"):
-        del st.session_state['selected_movie_from_reco']
-        st.rerun()
+        ### Notre mission
+        Au **23ème Écran**, nous croyons que chaque film peut toucher une corde sensible et créer des souvenirs inoubliables.  
+        Nous sommes fiers de soutenir le cinéma local et international tout en innovant pour offrir une expérience digitale moderne, à la portée de tous.
+
+        **Merci de faire partie de notre aventure. À bientôt dans nos salles !**
+        """,
+        unsafe_allow_html=True
+    )
+    st.markdown("</header>", unsafe_allow_html=True)
 
 
+def afficher_actualites():
+    st.title("Actualités")
+    st.markdown(
+        """
+        ## 🎥 Les Dernières Nouvelles du 23ème Écran !
+        Découvrez toutes les actualités de votre cinéma préféré à Guéret. Restez informé des événements, avant-premières et nouveautés qui font vivre notre salle !
+        """
+    )
+
+    st.subheader("✨ Événements à venir")
+    st.markdown(
+        """
+        - **Vendredi 12 janvier 2025 : Avant-première exclusive**  
+          Venez découvrir *"Les Lumières de la Creuse"*, un documentaire inédit sur notre région, suivi d'une discussion avec le réalisateur.
+        
+        - **Samedi 20 janvier 2025 : Soirée rétrospective**  
+          Thème : *Les chefs-d'œuvre des années 80*. Plongez dans l'univers de Spielberg, Lucas, et bien d'autres !
+        
+        - **Dimanche 28 janvier 2025 : Atelier cinéma pour enfants**  
+          Atelier créatif pour apprendre à réaliser un court-métrage, dès 10 ans (sur réservation).
+        """
+    )
+
+    st.subheader("🎞 Nouveautés à l'affiche")
+    st.markdown(
+        """
+        - **"La Montagne Sacrée"** : Une épopée fascinante sur les mystères des contes tibétains.  
+          (Salle 2, tous les jours à 17h30)  
+        - **"Cœurs à Contre-temps"** : Une comédie romantique à ne pas manquer !  
+          (Salle 1, séances à 15h et 20h)  
+        - **"Le Dernier Horizon"** : Le blockbuster de l'année, en 4K et Dolby Atmos.  
+          (Salle 1, séances à 14h, 18h et 21h30)
+        """
+    )
+
+    st.subheader("🌟 Focus sur le cinéma local")
+    st.markdown(
+        """
+        - **"Regards sur la Creuse"** : Une sélection de courts-métrages réalisés par des talents locaux.  
+          Projection gratuite, dimanche 14 janvier à 16h (Salle 3).  
+
+        - **Festival du film régional** : Soutenons le cinéma de chez nous avec une programmation unique du 22 au 28 février 2025.
+        """
+    )
+
+    st.subheader("📅 Réservez vos places dès maintenant !")
+    st.markdown(
+        """
+        - **Réservations en ligne :** Rendez-vous sur notre site pour réserver vos billets en toute simplicité.  
+        - **Tarifs réduits :** Profitez de nos tarifs avantageux pour les étudiants, seniors et familles.
+        """
+    )
+    
+    st.image(image_cinema, width=400, caption="Votre cinéma au cœur des événements 🎬")
 
 # ------- Interface Utilisateur (UI) -------
+if "search_query" not in st.session_state:
+    st.session_state["search_query"] = ""
+if "current_page" not in st.session_state:
+    st.session_state["current_page"] = "Accueil"
 
-if __name__ == "__main__":
-    if "search_query" not in st.session_state:
-        st.session_state["search_query"] = ""
-    # Afficher le menu principal
-    page = afficher_menu()
-    
-    # Navigation basée sur le choix dans l'état
-    # .get("menu_choice", "Accueil") : récupère la valeur associée à "menu_choice". 
-    # Si cette clé n'existe pas encore, elle retourne "Accueil" par défaut.
-    menu_choice = st.session_state.get("menu_choice", "Accueil") 
-    # Si l'utilisateur est sur la page "Accueil", 
-    # la fonction afficher_accueil() est appelée pour afficher son contenu.
-    if menu_choice == "Accueil":
-        afficher_accueil(st.session_state["search_query"])
-    # Selon la valeur de menu_choice, l'application appelle la fonction
-    # correspondante pour afficher le contenu des autres pages
-    elif menu_choice == "A_propos":
-        afficher_a_propos()
-    elif menu_choice == "Actualites":
-        afficher_actualites()
+# Navigation
+afficher_menu()
 
-    # Gestion de l'état de session
+# Affichage du contenu en fonction du menu choisi
+menu_choice = st.session_state.get("menu_choice", "Accueil")
 
-    if page != st.session_state.get("current_page", ""):
-        st.session_state["current_page"] = page
-
-        
-
-
-# elif page == "Connexion":   
-    # st.write("**Le 23ème Écran**, accédez à votre espace privé avec plus de fonctionnalités")
-
-    # authenticator.login() # afficher le formulaire de connexion et vérifier les informations d'identification de l'utilisateur
-
-
-    # Gérer l'accès en fonction des informations renseignées
-
-    # def accueil():
-    #     st.title("Bienvenu sur le contenu réservé aux utilisateurs connectés")
-
-    # if st.session_state["authentication_status"]:
-    #     accueil()
-        # Le bouton de déconnexion
-    #     authenticator.logout("Déconnexion")
-
-# elif st.session_state["authentication_status"] is False:
-#     st.error("L'username ou le password est/sont incorrect")
-# elif st.session_state["authentication_status"] is None:
-#    st.warning('Les champs username et mot de passe doivent être remplie')
-
-# Page les pages vitrines : actualités, programmation, à propos (optionnel)
-
-
-# Page == "Film", n'apparait pas dans le menu, comment la définie-t-on ?
-
-
-
-# Formulaire d'inscription qui alimente :
-
-# Base de gestion des données personnelles utilisateurs (en option avec la connexion)
-# - ID
-# - Prénom
-# - Nom
-# - Email
-# - Date de naissance
-# - Adresse postale
-# - CP
-# - Ville
-# - Pays
-
-
-# Base de données notations
-# - ID utilisateur
-# - ID film
-# - note
+if menu_choice == "Accueil":
+    afficher_accueil()
+elif menu_choice == "À propos":
+    afficher_a_propos()
+elif menu_choice == "Actualités":
+    afficher_actualites()
